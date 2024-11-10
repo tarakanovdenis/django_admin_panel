@@ -1,0 +1,79 @@
+services:
+  django_admin_panel_backend:
+    container_name: django_admin_panel
+    hostname: django_admin_panel
+    build:
+      context: ./admin_panel/
+    env_file:
+      - ./admin_panel/.env
+    volumes:
+      - ./admin_panel/:/opt/app/
+    ports:
+      - "8000:8000"
+    networks:
+      - appnet
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+
+  postgres_db:
+    container_name: postgres_db
+    hostname: postgres_db
+    image: postgres:15.7
+    env_file:
+      - ./admin_panel/.env
+    volumes:
+      - $HOME/postgres_db/data:/var/lib/postgresql/data
+    expose:
+      - "5432:5432"
+    networks:
+      - appnet
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+    restart: on-failure
+
+  nginx:
+    container_name: nginx
+    image: nginx:latest
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/configs/:/etc/nginx/conf.d/:ro
+      - ./nginx/logs/:/var/log/nginx/
+      - ./admin_panel/static:/opt/app/static
+      - ./admin_panel/media:/opt/app/media
+    ports:
+      - "80:80"
+    networks:
+      - appnet
+    restart: on-failure
+
+  swagger:
+    container_name: swagger
+    image: swaggerapi/swagger-ui:latest
+    ports:
+      - "8085:8080"
+    volumes:
+      - ./admin_panel/openapi.yaml:/swagger.yaml
+    environment:
+      - SWAGGER_JSON=/swagger.yaml
+    networks:
+      - appnet
+
+  # pgadmin:
+  #   container_name: pgadmin
+  #   image: dpage/pgadmin4
+  #   ports:
+  #     - "82:80"
+  #   environment:
+  #     - PGADMIN_DEFAULT_EMAIL=root@mail.com
+  #     - PGADMIN_DEFAULT_PASSWORD=root
+  #   networks:
+  #     - appnet
+
+networks:
+  appnet:
+    driver: bridge
+    name: appnet
